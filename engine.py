@@ -36,41 +36,42 @@ class Value:
 
     def back(self) -> None:
         self.grad = 1.0
-        cur = self
+        topo_sort_nodes: list[Value] = []
+        dfs_stack: list[Value] = [self]
+        dfs_visited: set[Value] = set()
+        while dfs_stack:
+            cur_node = dfs_stack[-1]
 
-        children_dict: dict[Value, tuple[Value, ...]] = defaultdict()
-        node_queue: deque[Value] = deque()
-        node_queue.append(cur)
-        children_dict[cur] = cur._prev
-
-        while node_queue:
-            # TOOD: Implement topological sort instead of BFS
-            next_node = node_queue.pop()
-            next_children = children_dict[next_node]
-
-            if not next_children:
+            if not cur_node._prev or cur_node in dfs_visited:
+                _ = dfs_stack.pop()
+                topo_sort_nodes.append(cur_node)
                 continue
 
-            left, right = next_children
-            if not left in children_dict:
-                children_dict[left] = right._prev
-                node_queue.append(left)
-            if not right in children_dict:
-                children_dict[right] = right._prev
-                node_queue.append(right)
+            dfs_visited.add(cur_node)
+            if not cur_node._prev[0] in dfs_visited:
+                dfs_stack.append(cur_node._prev[0])
+            if not cur_node._prev[1] in dfs_visited:
+                dfs_stack.append(cur_node._prev[1])
 
-            if next_node._op == OpType.ADD:
-                left.grad += next_node.grad
-                right.grad += next_node.grad
-            elif next_node._op == OpType.SUB:
-                left.grad += next_node.grad
-                right.grad += -next_node.grad
-            elif next_node._op == OpType.MULT:
-                left.grad += right.data * next_node.grad
-                right.grad += left.data * next_node.grad
-            elif next_node._op == OpType.DIV:
-                left.grad += (1 / right.data) * next_node.grad
-                right.grad += -1 * (left.data / right.data**2) * next_node.grad
+        while topo_sort_nodes:
+            cur_node = topo_sort_nodes.pop()
+
+            if not cur_node._prev:
+                continue
+
+            left, right = cur_node._prev
+            if cur_node._op == OpType.ADD:
+                left.grad += cur_node.grad
+                right.grad += cur_node.grad
+            elif cur_node._op == OpType.SUB:
+                left.grad += cur_node.grad
+                right.grad += -cur_node.grad
+            elif cur_node._op == OpType.MULT:
+                left.grad += right.data * cur_node.grad
+                right.grad += left.data * cur_node.grad
+            elif cur_node._op == OpType.DIV:
+                left.grad += (1 / right.data) * cur_node.grad
+                right.grad += -1 * (left.data / right.data**2) * cur_node.grad
 
 
 def testing():
@@ -80,7 +81,8 @@ def testing():
     d = a * b
     e = c + d
 
-    print(f"a={a}, b={b}, c={c}, d={d}, e={e}")
+    e.back()
+    print(f"a.grad={a.grad}, b.grad={b.grad}")
 
 
 if __name__ == "__main__":
