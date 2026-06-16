@@ -1,25 +1,31 @@
 import math
+from collections.abc import Callable
 from enum import Enum, auto
 from typing import Self, override
 
 
 class OpType(Enum):
     INIT = auto()
+    NEG = auto()
     ADD = auto()
     SUB = auto()
     MULT = auto()
     DIV = auto()
+    EXP = auto()
     TANH = auto()
 
 
 def tanh_calc(x: float) -> float:
-    return (1 - math.exp(-2 * x)) / (1 + math.exp(2 * x))
+    return (1 - math.exp(-2 * x)) / (1 + math.exp(-2 * x))
 
 
 class Value:
-    def __init__(self, data: float, _children: tuple[Self, ...], _op: OpType) -> None:
+    def __init__(
+        self, data: float, _children: tuple[Value, ...] = (), _op: OpType = OpType.INIT
+    ) -> None:
         self.data: float = data
         self.grad: float = 0.0
+        self._back: Callable[[], None] = lambda: None
         self._prev: tuple[Value, ...] = _children
         self._op: OpType = _op
 
@@ -27,27 +33,86 @@ class Value:
     def __repr__(self):
         return f"Value(data={self.data})"
 
-    def __add__(self, other: Self) -> Self:
-        return type(self)(self.data + other.data, (self, other), OpType.ADD)
+    ### Unary operations
 
-    def __sub__(self, other: Self) -> Self:
-        return type(self)(self.data - other.data, (self, other), OpType.SUB)
+    def __neg__(self) -> Value:
+        out = type(self)(-self.data, (self,), OpType.NEG)
 
-    def __mul__(self, other: Self) -> Self:
-        return type(self)(self.data * other.data, (self, other), OpType.MULT)
+        def back() -> None:
+            self.grad += -1.0 * out.grad
 
-    def __truediv__(self, other: Self) -> Self:
-        return type(self)(self.data / other.data, (self, other), OpType.DIV)
+        out._back = back
+        return out
+
+    def __pow__(self, num: float) -> Value:
+        out = Value(math.pow(self.data, num), (self,), OpType.INIT)
+
+        def back() -> None:
+            self.grad += out.grad * num * (self.data ** (num - 1))
+
+        out._back = back
+        return out
 
     def tanh(self) -> Self:
         tanh_data = tanh_calc(self.data)
-        return type(self)(tanh_data, (self,), OpType.TANH)
+        out = type(self)(tanh_data, (self,), OpType.TANH)
+
+        def back() -> None:
+            self.grad += out.grad * (1 - (tanh_calc(self.data)) ** 2)
+
+        out._back = back
+        return out
+
+    ### Binary operations
+
+    def __add__(self, other: Value | float) -> Value:
+        other = other if isinstance(other, Value) else Value(other)
+        out = type(self)(self.data + other.data, (self, other), OpType.ADD)
+
+        def back() -> None:
+            self.grad += 1.0 * out.grad
+            other.grad += 1.0 * out.grad
+
+        out._back = back
+        return out
+
+    def __radd__(self, num: float) -> Value:
+        return self + Value(num, (), OpType.INIT)
+
+    def __sub__(self, other: Value | float) -> Value:
+        other = other if isinstance(other, Value) else Value(other)
+        return self + (-other)
+
+    def __rsub__(self, other: float) -> Value:
+        return Value(other) - self
+
+    def __mul__(self, other: Value | float) -> Self:
+        other = other if isinstance(other, Value) else Value(other)
+        out = type(self)(self.data * other.data, (self, other), OpType.MULT)
+
+        def back() -> None:
+            self.grad += out.grad * other.data
+            other.grad += out.grad * self.data
+
+        out._back = back
+        return out
+
+    def __rmul__(self, num: float) -> Value:
+        return self * num
+
+    def __truediv__(self, other: Value | float) -> Value:
+        other = other if isinstance(other, Value) else Value(other)
+        return self * (other ** (-1))
+
+    def __rtruediv__(self, num: float) -> Value:
+        return Value(num) / self
 
     def back(self) -> None:
         self.grad = 1.0
         topo_sort_nodes: list[Value] = []
         dfs_stack: list[Value] = [self]
         dfs_visited: set[Value] = set()
+
         while dfs_stack:
             cur_node = dfs_stack[-1]
 
@@ -63,33 +128,12 @@ class Value:
 
         while topo_sort_nodes:
             cur_node = topo_sort_nodes.pop()
-
-            if not cur_node._prev:
-                continue
-
-            if len(cur_node._prev) == 1:
-                prev = cur_node._prev[0]
-                if prev._op == OpType.TANH:
-                    prev.grad = 1 - (tanh_calc(prev.data)) ** 2
-            elif len(cur_node._prev) == 2:
-                left, right = cur_node._prev
-                if cur_node._op == OpType.ADD:
-                    left.grad += cur_node.grad
-                    right.grad += cur_node.grad
-                elif cur_node._op == OpType.SUB:
-                    left.grad += cur_node.grad
-                    right.grad += -cur_node.grad
-                elif cur_node._op == OpType.MULT:
-                    left.grad += right.data * cur_node.grad
-                    right.grad += left.data * cur_node.grad
-                elif cur_node._op == OpType.DIV:
-                    left.grad += (1 / right.data) * cur_node.grad
-                    right.grad += -1 * (left.data / right.data**2) * cur_node.grad
+            cur_node._back()
 
 
 def testing():
-    a = Value(5.0, (), OpType.INIT)
-    b = Value(3.0, (), OpType.INIT)
+    a = Value(5.0)
+    b = Value(3.0)
     c = a / b
     d = a * b
     e = c + d
