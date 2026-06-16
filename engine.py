@@ -1,4 +1,4 @@
-from collections import defaultdict, deque
+import math
 from enum import Enum, auto
 from typing import Self, override
 
@@ -9,6 +9,11 @@ class OpType(Enum):
     SUB = auto()
     MULT = auto()
     DIV = auto()
+    TANH = auto()
+
+
+def tanh_calc(x: float) -> float:
+    return (1 - math.exp(-2 * x)) / (1 + math.exp(2 * x))
 
 
 class Value:
@@ -34,6 +39,10 @@ class Value:
     def __truediv__(self, other: Self) -> Self:
         return type(self)(self.data / other.data, (self, other), OpType.DIV)
 
+    def tanh(self) -> Self:
+        tanh_data = tanh_calc(self.data)
+        return type(self)(tanh_data, (self,), OpType.TANH)
+
     def back(self) -> None:
         self.grad = 1.0
         topo_sort_nodes: list[Value] = []
@@ -48,10 +57,9 @@ class Value:
                 continue
 
             dfs_visited.add(cur_node)
-            if not cur_node._prev[0] in dfs_visited:
-                dfs_stack.append(cur_node._prev[0])
-            if not cur_node._prev[1] in dfs_visited:
-                dfs_stack.append(cur_node._prev[1])
+            for child in cur_node._prev:
+                if not child in dfs_visited:
+                    dfs_stack.append(child)
 
         while topo_sort_nodes:
             cur_node = topo_sort_nodes.pop()
@@ -59,19 +67,24 @@ class Value:
             if not cur_node._prev:
                 continue
 
-            left, right = cur_node._prev
-            if cur_node._op == OpType.ADD:
-                left.grad += cur_node.grad
-                right.grad += cur_node.grad
-            elif cur_node._op == OpType.SUB:
-                left.grad += cur_node.grad
-                right.grad += -cur_node.grad
-            elif cur_node._op == OpType.MULT:
-                left.grad += right.data * cur_node.grad
-                right.grad += left.data * cur_node.grad
-            elif cur_node._op == OpType.DIV:
-                left.grad += (1 / right.data) * cur_node.grad
-                right.grad += -1 * (left.data / right.data**2) * cur_node.grad
+            if len(cur_node._prev) == 1:
+                prev = cur_node._prev[0]
+                if prev._op == OpType.TANH:
+                    prev.grad = 1 - (tanh_calc(prev.data)) ** 2
+            elif len(cur_node._prev) == 2:
+                left, right = cur_node._prev
+                if cur_node._op == OpType.ADD:
+                    left.grad += cur_node.grad
+                    right.grad += cur_node.grad
+                elif cur_node._op == OpType.SUB:
+                    left.grad += cur_node.grad
+                    right.grad += -cur_node.grad
+                elif cur_node._op == OpType.MULT:
+                    left.grad += right.data * cur_node.grad
+                    right.grad += left.data * cur_node.grad
+                elif cur_node._op == OpType.DIV:
+                    left.grad += (1 / right.data) * cur_node.grad
+                    right.grad += -1 * (left.data / right.data**2) * cur_node.grad
 
 
 def testing():
