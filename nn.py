@@ -86,6 +86,31 @@ def compute_loss(actual: list[list[Value]], expected: list[list[Value]]) -> Valu
     return total_loss * (1 / total_elements)
 
 
+learning_rate = 0.01
+loss_tolerance = 0.01
+
+
+def grad_descent(
+    input_data: list[list[Value]], expected_data: list[list[Value]], mlp: MLP
+) -> None:
+    loss = Value(float("inf"))
+
+    while loss.data > loss_tolerance:
+        # Zero prior grad
+        for p in mlp.parameters():
+            p.grad = 0.0
+
+        # Perform forward -> backward pass
+        out = [mlp(x) for x in input_data]
+        loss = compute_loss(out, expected_data)
+
+        loss.back()
+
+        # Update params according to loss
+        for p in mlp.parameters():
+            p.data += -learning_rate * p.grad
+
+
 def basic_test():
     input_data = [Value(1), Value(2), Value(3)]
     layer_sizes = [4, 4, 1]
@@ -102,10 +127,10 @@ def training_test():
 
     layer_sizes = [4, 4, 1]
     mlp = MLP(len(xs[0]), layer_sizes)
-    out = [mlp(x) for x in xs]
-    loss = compute_loss(out, ys)
-    print(loss)
-    print(out)
+
+    print("Before grad descent: ", compute_loss([mlp(x) for x in xs], ys))
+    grad_descent(xs, ys, mlp)
+    print("After grad descent: ", compute_loss([mlp(x) for x in xs], ys))
 
 
 if __name__ == "__main__":

@@ -107,6 +107,20 @@ class Value:
     def __rtruediv__(self, num: float) -> Value:
         return Value(num) / self
 
+    def __gt__(self, other: Value | float) -> bool:
+        other = other if isinstance(other, Value) else Value(other)
+        return self.data > other.data
+
+    def __rgt__(self, num: float) -> bool:
+        return Value(num) > self
+
+    def __lt__(self, other: Value | float) -> bool:
+        other = other if isinstance(other, Value) else Value(other)
+        return self.data < other.data
+
+    def __rlt__(self, num: float) -> bool:
+        return Value(num) < self
+
     def back(self) -> None:
         self.grad = 1.0
         topo_sort_nodes: list[Value] = []
@@ -129,7 +143,7 @@ class Value:
         while topo_sort_nodes:
             cur_node = topo_sort_nodes.pop()
             cur_node._back()
-    
+
     @staticmethod
     def convert_to_vals(init_list: list[float]) -> list[Value]:
         value_list = []
