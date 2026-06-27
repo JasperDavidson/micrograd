@@ -3,7 +3,16 @@ import random
 from engine import Value
 
 
-class Neuron:
+class Module:
+    def zero_grad(self) -> None:
+        for p in self.parameters():
+            p.grad = 0
+
+    def parameters(self) -> list[Value]:
+        return []
+
+
+class Neuron(Module):
     def __init__(
         self,
         nin: int,
@@ -30,7 +39,7 @@ class Neuron:
         return self.weights + [self.bias]
 
 
-class Layer:
+class Layer(Module):
     def __init__(self, nin: int, layer_size: int) -> None:
         self.neurons: list[Neuron] = [Neuron(nin) for _ in range(layer_size)]
 
@@ -46,7 +55,7 @@ class Layer:
         return params
 
 
-class MLP:
+class MLP(Module):
     def __init__(self, nin: int, layer_sizes: list[int]) -> None:
         input_sizes = [nin] + layer_sizes
 
@@ -97,8 +106,7 @@ def grad_descent(
 
     while loss.data > loss_tolerance:
         # Zero prior grad
-        for p in mlp.parameters():
-            p.grad = 0.0
+        mlp.zero_grad()
 
         # Perform forward -> backward pass
         out = [mlp(x) for x in input_data]
