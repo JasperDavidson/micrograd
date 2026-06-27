@@ -26,6 +26,9 @@ class Neuron:
         out = sum((i * w for i, w in zip(input_data, self.weights)), self.bias)
         return out.tanh()
 
+    def parameters(self) -> list[Value]:
+        return self.weights + [self.bias]
+
 
 class Layer:
     def __init__(self, nin: int, layer_size: int) -> None:
@@ -34,6 +37,13 @@ class Layer:
     def __call__(self, input_data: list[Value]) -> list[Value]:
         out = [n(input_data) for n in self.neurons]
         return out
+
+    def parameters(self) -> list[Value]:
+        params = []
+        for n in self.neurons:
+            params.extend(n.parameters())
+
+        return params
 
 
 class MLP:
@@ -50,8 +60,33 @@ class MLP:
 
         return input_data
 
+    def parameters(self) -> list[Value]:
+        params = []
+        for l in self.layers:
+            params.extend(l.parameters())
 
-def setup():
+        return params
+
+
+def compute_loss(actual: list[list[Value]], expected: list[list[Value]]) -> Value:
+    # Ensure the batches match in size
+    if len(actual) != len(expected):
+        raise ValueError("Batch sizes do not match.")
+
+    total_elements = 0
+    total_loss = Value(0)
+    for act_vals, exp_vals in zip(actual, expected):
+        for act, exp in zip(act_vals, exp_vals):
+            total_loss += (exp - act) ** 2
+            total_elements += 1
+
+    if total_elements == 0:
+        return Value(0)
+
+    return total_loss * (1 / total_elements)
+
+
+def basic_test():
     input_data = [Value(1), Value(2), Value(3)]
     layer_sizes = [4, 4, 1]
     mlp = MLP(len(input_data), layer_sizes)
@@ -59,5 +94,19 @@ def setup():
     print(mlp_out)
 
 
+def training_test():
+    xs_pure = [[2.0, 3.0, -1.0], [3.0, -1.0, 0.5], [0.5, 1.0, 1.0], [1.0, 1.0, -1.0]]
+
+    xs = [Value.convert_to_vals(x) for x in xs_pure]
+    ys = [[Value(1.0)], [Value(1.0)], [Value(1.0)], [Value(-1.0)]]
+
+    layer_sizes = [4, 4, 1]
+    mlp = MLP(len(xs[0]), layer_sizes)
+    out = [mlp(x) for x in xs]
+    loss = compute_loss(out, ys)
+    print(loss)
+    print(out)
+
+
 if __name__ == "__main__":
-    setup()
+    training_test()

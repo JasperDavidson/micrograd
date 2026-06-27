@@ -123,12 +123,20 @@ class Value:
 
             dfs_visited.add(cur_node)
             for child in cur_node._prev:
-                if not child in dfs_visited:
+                if child not in dfs_visited:
                     dfs_stack.append(child)
 
         while topo_sort_nodes:
             cur_node = topo_sort_nodes.pop()
             cur_node._back()
+    
+    @staticmethod
+    def convert_to_vals(init_list: list[float]) -> list[Value]:
+        value_list = []
+        for pure_val in init_list:
+            value_list.append(Value(pure_val))
+
+        return value_list
 
 
 def testing():
